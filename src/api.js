@@ -1,4 +1,3 @@
-const API_BASE_URL = "https://archive-backend-7vya.vercel.app//api";// =========================================================================
 // ARCHIVE CENTRAL API LOCATION CONFIGURATOR
 // =========================================================================
 const HOSTNAME = window.location.hostname;
