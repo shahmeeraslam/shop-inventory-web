@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 // =========================================================================
 // IMPORT CENTRALIZED ROUTING ROUTE PATHWAY
 // =========================================================================
-import { API_BASE_URL } from './api'; // Adjust the relative pathway here matching your folder depth layout
+import { API_BASE_URL } from '../api'; // Adjust the relative pathway here matching your folder depth layout
 import html2pdf from 'html2pdf.js';
 
 export default function BillingScreen({ onNavigateBack }) {
