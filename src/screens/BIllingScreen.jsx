@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { useInventory } from '../context/InventoryContext';
-import { useAuth } from '../context/AuthContext'; // <-- ADDED: Extract authorization context token
+import { useAuth } from '../context/AuthContext'; 
+// =========================================================================
+// IMPORT CENTRALIZED ROUTING ROUTE PATHWAY
+// =========================================================================
+import { API_BASE_URL } from './api'; // Adjust the relative pathway here matching your folder depth layout
 import html2pdf from 'html2pdf.js';
 
 export default function BillingScreen({ onNavigateBack }) {
   const { items, updateItem, refreshBillingHistory } = useInventory();
-  const { token } = useAuth(); // <-- ADDED: Pull live auth token for backend route access
+  const { token } = useAuth(); 
   const [cart, setCart] = useState([]);
   const [customerName, setCustomerName] = useState('');
   const [isPrinting, setIsPrinting] = useState(false);
@@ -56,12 +60,12 @@ export default function BillingScreen({ onNavigateBack }) {
     const invoiceNumber = `ARC-${Math.floor(100000 + Math.random() * 900000)}`;
 
     try {
-      // 1. SAVE TO DATABASE MANIFEST RECORD (Pointed to backend route layout matrix)
-      const response = await fetch('http://localhost:5000/api/billing/checkout', {
+      // 1. SAVE TO DATABASE MANIFEST RECORD (Dynamically switches environment routing bounds)
+      const response = await fetch(`${API_BASE_URL}/billing/checkout`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // <-- ADDED: Identity clearance string pass
+          'Authorization': `Bearer ${token}` 
         },
         body: JSON.stringify({
           invoiceNumber,

@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 // =========================================================================
 // IMPORT CENTRALIZED ROUTING ROUTE PATHWAY
 // =========================================================================
-import { API_BASE_URL } from './api'; 
+import { API_BASE_URL } from '../api'; 
 
 const AuthContext = createContext();
 
