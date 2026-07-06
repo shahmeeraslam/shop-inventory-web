@@ -1,8 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+// =========================================================================
+// IMPORT CENTRALIZED ROUTING ROUTE PATHWAY
+// =========================================================================
+import { API_BASE_URL } from './api'; 
+
 const AuthContext = createContext();
 
-const API_AUTH_URL = 'http://localhost:5000/api/auth';
+// Appends the /auth namespace endpoint smoothly onto your central base route
+const API_AUTH_URL = `${API_BASE_URL}/auth`;
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);

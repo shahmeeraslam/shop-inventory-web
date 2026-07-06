@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 
-const InventoryContext = createContext();
+// =========================================================================
+// IMPORT CENTRALIZED ROUTING ROUTE PATHWAY
+// =========================================================================
+import { API_BASE_URL } from './api'; 
 
-// Target root API directory cleanly to facilitate variable route path allocations
-const API_BASE_URL = 'http://localhost:5000/api';
+const InventoryContext = createContext();
 
 export function InventoryProvider({ children }) {
   const [items, setItems] = useState([]);
@@ -240,7 +242,7 @@ export function InventoryProvider({ children }) {
       updateItem, 
       deleteItem, 
       createInvoiceRecord,
-      importInventoryManifest, // <-- ADDED: Document parsing logic exported safely
+      importInventoryManifest, 
       refreshBillingHistory: fetchBillingHistory,
       refreshData: fetchInventoryManifest 
     }}>
