@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useInventory } from '../context/InventoryContext';
 import { useAuth } from '../context/AuthContext';
 import html2pdf from 'html2pdf.js';
-import * as XLSX from 'xlsx'; // Import SheetJS engine components
+import * as XLSX from 'xlsx'; 
 import StatCard from '../components/UI/StatCard';
 import ProductCard from '../components/UI/ProductCard';
 
@@ -12,7 +12,10 @@ export default function DashboardScreen({ onNavigateToAdd, onNavigateToBilling }
   const [searchTerm, setSearchTerm] = useState('');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
-  if (isLoading || authLoading) {
+  // =========================================================================
+  // ENHANCED LIFECYCLE GATE: Stops dashboard calculations if array isn't populated
+  // =========================================================================
+  if (isLoading || authLoading || !items) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center py-32 gap-3 text-slate-500 font-mono text-xs select-none">
         <span className="text-3xl animate-spin mb-1">⏳</span>
@@ -22,37 +25,55 @@ export default function DashboardScreen({ onNavigateToAdd, onNavigateToBilling }
     );
   }
 
-  const totalItems = items.length;
-  const totalStockUnits = items.reduce((acc, curr) => acc + curr.quantity, 0);
-  const totalRetailValue = items.reduce((acc, curr) => acc + (parseFloat(curr.retailPrice || 0) * curr.quantity), 0);
-  const totalWholesaleValue = items.reduce((acc, curr) => acc + (parseFloat(curr.wholesalePrice || 0) * curr.quantity), 0);
+  // =========================================================================
+  // BULLETPROOF METRIC REDUCERS (Defensively defaults inputs against undefined)
+  // =========================================================================
+  const totalItems = items?.length || 0;
+  
+  const totalStockUnits = items ? items.reduce((acc, curr) => {
+    const qty = parseInt(curr?.quantity, 10);
+    return acc + (isNaN(qty) ? 0 : qty);
+  }, 0) : 0;
 
-  const filteredItems = items.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const totalRetailValue = items ? items.reduce((acc, curr) => {
+    const price = parseFloat(curr?.retailPrice);
+    const qty = parseInt(curr?.quantity, 10);
+    return acc + ((isNaN(price) ? 0 : price) * (isNaN(qty) ? 0 : qty));
+  }, 0) : 0;
 
-  // Core Data Extraction System to Spreadsheet Target Format
+  const totalWholesaleValue = items ? items.reduce((acc, curr) => {
+    const price = parseFloat(curr?.wholesalePrice);
+    const qty = parseInt(curr?.quantity, 10);
+    return acc + ((isNaN(price) ? 0 : price) * (isNaN(qty) ? 0 : qty));
+  }, 0) : 0;
+
+  // Added absolute optional chain protection to item parameters inside string lookup mechanisms
+  const filteredItems = items ? items.filter(item => {
+    const itemName = item?.name || '';
+    const currentSearch = searchTerm || '';
+    return itemName.toLowerCase().includes(currentSearch.toLowerCase());
+  }) : [];
+
+  // Core Data Extraction System - SYNCHRONIZED FIELD MATRIX
   const handleExportExcel = () => {
-    if (items.length === 0) {
+    if (!items || items.length === 0) {
       alert("Cannot generate an Excel report for an empty inventory ledger.");
       return;
     }
 
-    // Format structural rows with clean uppercase data attributes
     const excelRows = items.map((item, index) => ({
       'S.No': index + 1,
-      'Product Name': item.name.toUpperCase(),
-      'Category': (item.category || 'GENERAL').toUpperCase(),
-      'Retail Price ($)': parseFloat(item.retailPrice || 0),
-      'Wholesale Price ($)': parseFloat(item.wholesalePrice || 0),
-      'Stock Quantity': item.quantity,
-      'Total Value ($)': parseFloat(item.retailPrice || 0) * item.quantity,
+      'Product Name': (item?.name || 'UNNAMED PRODUCT').toUpperCase(),
+      'Category': (item?.category || 'GENERAL').toUpperCase(),
+      'Retail Price ($)': parseFloat(item?.retailPrice || 0),
+      'Wholesale Price ($)': parseFloat(item?.wholesalePrice || 0),
+      'Stock Quantity': item?.quantity || 0,
+      'Total Value ($)': parseFloat(item?.retailPrice || 0) * (item?.quantity || 0),
     }));
 
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.json_to_sheet(excelRows);
 
-    // Track character lengths to auto-size spreadsheet columns
     const columnWidths = Object.keys(excelRows[0]).map(key => ({
       wch: Math.max(key.length + 3, ...excelRows.map(row => row[key]?.toString().length || 0))
     }));
@@ -64,8 +85,9 @@ export default function DashboardScreen({ onNavigateToAdd, onNavigateToBilling }
     XLSX.writeFile(workbook, `Archive_Manifest_${dateString}.xlsx`);
   };
 
+  // Core Document Compile PDF System - SYNCHRONIZED FIELD MATRIX
   const handleExportPDF = () => {
-    if (items.length === 0) {
+    if (!items || items.length === 0) {
       alert("Cannot generate a report for an empty inventory ledger.");
       return;
     }
@@ -76,12 +98,12 @@ export default function DashboardScreen({ onNavigateToAdd, onNavigateToBilling }
     const tableRowsHtml = items.map((item, index) => `
       <tr style="border-bottom: 1px solid #e2e8f0;">
         <td style="padding: 12px 8px; font-size: 11px; color: #334155; font-family: monospace;">#${index + 1}</td>
-        <td style="padding: 12px 8px; font-size: 12px; font-weight: 700; color: #0f172a; text-transform: uppercase;">${item.name}</td>
-        <td style="padding: 12px 8px; font-size: 11px; color: #64748b; font-family: monospace; text-transform: uppercase;">${item.category || 'GENERAL'}</td>
-        <td style="padding: 12px 8px; font-size: 12px; color: #334155; text-align: right; font-family: monospace;">$${parseFloat(item.retailPrice || 0).toFixed(2)}</td>
-        <td style="padding: 12px 8px; font-size: 12px; color: #0d9488; text-align: right; font-family: monospace;">$${parseFloat(item.wholesalePrice || 0).toFixed(2)}</td>
-        <td style="padding: 12px 8px; font-size: 12px; font-weight: 600; color: #334155; text-align: center; font-family: monospace;">${item.quantity}</td>
-        <td style="padding: 12px 8px; font-size: 12px; font-weight: 800; color: #0f172a; text-align: right; font-family: monospace;">$${(parseFloat(item.retailPrice || 0) * item.quantity).toFixed(2)}</td>
+        <td style="padding: 12px 8px; font-size: 12px; font-weight: 700; color: #0f172a; text-transform: uppercase;">${item?.name || 'UNNAMED PRODUCT'}</td>
+        <td style="padding: 12px 8px; font-size: 11px; color: #64748b; font-family: monospace; text-transform: uppercase;">${item?.category || 'GENERAL'}</td>
+        <td style="padding: 12px 8px; font-size: 12px; color: #334155; text-align: right; font-family: monospace;">$${parseFloat(item?.retailPrice || 0).toFixed(2)}</td>
+        <td style="padding: 12px 8px; font-size: 12px; color: #0d9488; text-align: right; font-family: monospace;">$${parseFloat(item?.wholesalePrice || 0).toFixed(2)}</td>
+        <td style="padding: 12px 8px; font-size: 12px; font-weight: 600; color: #334155; text-align: center; font-family: monospace;">${item?.quantity || 0}</td>
+        <td style="padding: 12px 8px; font-size: 12px; font-weight: 800; color: #0f172a; text-align: right; font-family: monospace;">$${(parseFloat(item?.retailPrice || 0) * (item?.quantity || 0)).toFixed(2)}</td>
       </tr>
     `).join('');
 
@@ -204,7 +226,6 @@ export default function DashboardScreen({ onNavigateToAdd, onNavigateToBilling }
         </div>
         
         <div className="flex flex-wrap gap-3 sm:w-auto w-full">
-          {/* Native Excel Exporter Button */}
           <button 
             onClick={handleExportExcel}
             className="flex-1 sm:flex-initial border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100/80 active:scale-[0.98] text-sm font-bold px-5 py-3 rounded-xl shadow-2xs transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer select-none font-mono"

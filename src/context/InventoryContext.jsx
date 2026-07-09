@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 
 // =========================================================================
@@ -14,30 +14,30 @@ export function InventoryProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false); // Ledger load tracker
   const [error, setError] = useState(null);
-  const { token, user } = useAuth();
+  const { token } = useAuth();
 
   // ==========================================
   // OPERATION 1: FETCH (Sync View Matrix with Atlas)
   // ==========================================
-  const fetchInventoryManifest = async () => {
-    if (!token) {
+  const fetchInventoryManifest = useCallback(async (currentToken = token) => {
+    if (!currentToken) {
       setItems([]);
       setIsLoading(false);
       return;
     }
-
+    
     setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/inventory`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${currentToken}`
         }
       });
       
       if (!response.ok) throw new Error('Failed to download user warehouse manifest.');
       const data = await response.json();
-      setItems(data);
+      setItems(Array.isArray(data) ? data : []);
       setError(null);
     } catch (err) {
       console.error('Fetch operation error:', err);
@@ -45,13 +45,13 @@ export function InventoryProvider({ children }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [token]);
 
   // ==========================================
   // OPERATION 2: BILLING HISTORY PULL MATRIX
   // ==========================================
-  const fetchBillingHistory = async () => {
-    if (!token) {
+  const fetchBillingHistory = useCallback(async (currentToken = token) => {
+    if (!currentToken) {
       setInvoiceHistory([]);
       return;
     }
@@ -61,7 +61,7 @@ export function InventoryProvider({ children }) {
       const response = await fetch(`${API_BASE_URL}/billing/history`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${currentToken}`
         }
       });
 
@@ -75,13 +75,19 @@ export function InventoryProvider({ children }) {
     } finally {
       setIsHistoryLoading(false);
     }
-  };
+  }, [token]);
 
   // Auto-synchronize both state matrices concurrently upon credentials modify
   useEffect(() => {
-    fetchInventoryManifest();
-    fetchBillingHistory();
-  }, [token, user]);
+    if (token) {
+      fetchInventoryManifest(token);
+      fetchBillingHistory(token);
+    } else {
+      setItems([]);
+      setInvoiceHistory([]);
+      setIsLoading(false);
+    }
+  }, [token, fetchInventoryManifest, fetchBillingHistory]);
 
   // ==========================================
   // OPERATION 3: POST (Write New Variant Line)
@@ -100,7 +106,9 @@ export function InventoryProvider({ children }) {
       if (!response.ok) throw new Error('Database refused payload writing synchronization.');
       
       const savedItem = await response.json();
+      // Safely append item locally and immediately pull clean database state array
       setItems((prevItems) => [savedItem, ...prevItems]);
+      await fetchInventoryManifest(token);
       return { success: true };
     } catch (err) {
       console.error('Create error:', err);
@@ -144,7 +152,7 @@ export function InventoryProvider({ children }) {
     } catch (err) {
       console.error('Stock adjustment synchronization failure:', err);
       // Fallback recovery: Re-sync with database if connection dropped mid-transaction
-      fetchInventoryManifest();
+      await fetchInventoryManifest(token);
       return { success: false, error: err.message };
     }
   };
@@ -180,16 +188,16 @@ export function InventoryProvider({ children }) {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // Secured pipeline access header verification
+          'Authorization': `Bearer ${token}` 
         },
         body: JSON.stringify(invoiceData)
       });
       
       const result = await response.json();
       if (result.success) {
-        // Re-trigger network hooks to safely recalibrate current state volumes
-        await fetchInventoryManifest(); 
-        await fetchBillingHistory();
+        // Force synchronous waits so state metrics populate perfectly prior to page transitions
+        await fetchInventoryManifest(token); 
+        await fetchBillingHistory(token);
         return { success: true };
       } else {
         return { success: false, error: result.error };
@@ -213,14 +221,14 @@ export function InventoryProvider({ children }) {
       const response = await fetch(`${API_BASE_URL}/inventory/import`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}` // Clearance validation signature tracking pass
+          'Authorization': `Bearer ${token}` 
         },
-        body: formData // Content-Type leaves auto-configured for multipart bounds
+        body: formData 
       });
 
       const result = await response.json();
       if (result.success) {
-        await fetchInventoryManifest(); // Force live stock pull to update UI state
+        await fetchInventoryManifest(token); 
         return { success: true, message: result.message };
       } else {
         return { success: false, error: result.error };
@@ -243,8 +251,8 @@ export function InventoryProvider({ children }) {
       deleteItem, 
       createInvoiceRecord,
       importInventoryManifest, 
-      refreshBillingHistory: fetchBillingHistory,
-      refreshData: fetchInventoryManifest 
+      refreshBillingHistory: () => fetchBillingHistory(token),
+      refreshData: () => fetchInventoryManifest(token)
     }}>
       {children}
     </InventoryContext.Provider>
