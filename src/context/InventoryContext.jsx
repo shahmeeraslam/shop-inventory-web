@@ -10,9 +10,9 @@ const InventoryContext = createContext();
 
 export function InventoryProvider({ children }) {
   const [items, setItems] = useState([]);
-  const [invoiceHistory, setInvoiceHistory] = useState([]); // Involving logged ledger items
+  const [invoiceHistory, setInvoiceHistory] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
-  const [isHistoryLoading, setIsHistoryLoading] = useState(false); // Ledger load tracker
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false); 
   const [error, setError] = useState(null);
   const { token } = useAuth();
 
@@ -90,23 +90,30 @@ export function InventoryProvider({ children }) {
   }, [token, fetchInventoryManifest, fetchBillingHistory]);
 
   // ==========================================
-  // OPERATION 3: POST (Write New Variant Line)
+  // OPERATION 3: POST (Write New Variant Line Supporting Images)
   // ==========================================
   const addItem = async (newItemData) => {
     try {
+      // 🔥 DYNAMIC PAYLOAD PARSING: Check if the frontend passed FormData or standard JSON object
+      let bodyData = newItemData;
+      const headers = { 'Authorization': `Bearer ${token}` };
+
+      if (!(newItemData instanceof FormData)) {
+        // If it's a plain object, pack it into FormData so Multer can capture it smoothly
+        bodyData = new FormData();
+        Object.keys(newItemData).forEach(key => bodyData.append(key, newItemData[key]));
+      }
+      // CRITICAL: CRITICAL: Do NOT declare 'Content-Type' headers manually when dispatching FormData!
+
       const response = await fetch(`${API_BASE_URL}/inventory`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(newItemData),
+        headers: headers,
+        body: bodyData,
       });
 
       if (!response.ok) throw new Error('Database refused payload writing synchronization.');
       
       const savedItem = await response.json();
-      // Safely append item locally and immediately pull clean database state array
       setItems((prevItems) => [savedItem, ...prevItems]);
       await fetchInventoryManifest(token);
       return { success: true };
@@ -117,25 +124,34 @@ export function InventoryProvider({ children }) {
   };
 
   // ==========================================
-  // OPERATION 4: PUT (Update Item Details or Stock Level)
+  // OPERATION 4: PUT (Update Item Details or Stock Level Supporting Images)
   // ==========================================
   const updateItem = async (id, updatedFields) => {
     try {
-      // 1. Optimistically update local frontend state layout instantly
+      // 1. Convert standard object variables safely to local representation map keys for instant UI updates
+      const flatFields = updatedFields instanceof FormData 
+        ? Object.fromEntries(updatedFields.entries()) 
+        : updatedFields;
+
+      // Optimistically update local frontend state layout instantly
       setItems((prevItems) =>
         prevItems.map((item) =>
-          (item._id || item.id) === id ? { ...item, ...updatedFields } : item
+          (item._id || item.id) === id ? { ...item, ...flatFields } : item
         )
       );
 
-      // 2. Persist modification down to your MongoDB Atlas cluster via backend PUT endpoint
+      // 2. Build multi-part FormData wrapper for the backend
+      let bodyData = updatedFields;
+      if (!(updatedFields instanceof FormData)) {
+        bodyData = new FormData();
+        Object.keys(updatedFields).forEach(key => bodyData.append(key, updatedFields[key]));
+      }
+
+      // Persist modification down to your MongoDB Atlas cluster via backend PUT endpoint
       const response = await fetch(`${API_BASE_URL}/inventory/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(updatedFields),
+        headers: { 'Authorization': `Bearer ${token}` }, // Left content type out deliberately
+        body: bodyData,
       });
 
       if (!response.ok) throw new Error('Server rejected structural document correction handshake.');
@@ -195,7 +211,6 @@ export function InventoryProvider({ children }) {
       
       const result = await response.json();
       if (result.success) {
-        // Force synchronous waits so state metrics populate perfectly prior to page transitions
         await fetchInventoryManifest(token); 
         await fetchBillingHistory(token);
         return { success: true };

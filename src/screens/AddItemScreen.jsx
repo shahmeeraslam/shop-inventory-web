@@ -9,7 +9,10 @@ export default function AddItemScreen({ onNavigateBack }) {
   const [quantity, setQuantity] = useState(1);
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
+  
+  // 🔥 Image States: image holds raw file object, imagePreview holds local Blob URL for rendering
   const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   
   // Pipeline saving execution lock state
   const [isSaving, setIsSaving] = useState(false);
@@ -20,11 +23,8 @@ export default function AddItemScreen({ onNavigateBack }) {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImage(reader.result); // Base64 encoding pipeline
-      };
-      reader.readAsDataURL(file);
+      setImage(file); // 🔥 Keep raw file object structure for Multi-part form streaming
+      setImagePreview(URL.createObjectURL(file)); // Create an instant visual tracking link for display tags
     }
   };
 
@@ -44,20 +44,24 @@ export default function AddItemScreen({ onNavigateBack }) {
     
     setIsSaving(true);
 
-    const payload = {
-      name: itemName.trim(),
-      retailPrice: parseFloat(retailPrice),       // Standardized to absolute floating numeric point
-      wholesalePrice: parseFloat(wholesalePrice),   // Standardized to absolute floating numeric point
-      quantity: parseInt(quantity, 10),            // Bound integer normalization filter
-      category: category.trim() || 'General',
-      description: description.trim() || 'Premium entry catalog assignment categorized under active live collections.',
-      image: image
-    };
+    // 🔥 Pack fields into a multipart FormData container to send raw files down the network
+    const formData = new FormData();
+    formData.append('name', itemName.trim());
+    formData.append('retailPrice', parseFloat(retailPrice));
+    formData.append('wholesalePrice', parseFloat(wholesalePrice));
+    formData.append('quantity', parseInt(quantity, 10));
+    formData.append('category', category.trim() || 'General');
+    formData.append('description', description.trim() || 'Premium entry catalog assignment categorized under active live collections.');
+    
+    if (image) {
+      formData.append('image', image); // Attaches the file directly to your backend upload middleware key name
+    }
 
-    const response = await addItem(payload);
+    const response = await addItem(formData); // Passing Form Data instead of JSON payload
 
     if (response && response.success) {
-      onNavigateBack(); // Step-back navigation route on successful write
+      if (imagePreview) URL.revokeObjectURL(imagePreview); // Clean memory buffer pointer leaks from browser cache
+      onNavigateBack(); 
     } else {
       alert(`Database rejected sync write block: ${response.error || 'Unknown Error'}`);
       setIsSaving(false);
@@ -104,10 +108,10 @@ export default function AddItemScreen({ onNavigateBack }) {
           <label className="w-full aspect-square md:aspect-auto md:h-[380px] bg-slate-50/70 hover:bg-slate-50 border-2 border-dashed border-slate-200/80 hover:border-slate-400 rounded-2xl flex flex-col justify-center items-center cursor-pointer overflow-hidden relative group transition-all duration-300 shadow-inner">
             <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" disabled={isSaving} />
             
-            {image ? (
+            {imagePreview ? (
               <>
                 <div className="w-full h-full p-4 flex items-center justify-center bg-slate-950">
-                  <img src={image} alt="Preview framework asset" className="max-w-full max-h-full object-contain group-hover:scale-102 transition-transform duration-500" />
+                  <img src={imagePreview} alt="Preview framework asset" className="max-w-full max-h-full object-contain group-hover:scale-102 transition-transform duration-500" />
                 </div>
                 <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-xs opacity-0 group-hover:opacity-100 flex flex-col justify-center items-center text-white gap-1 transition-all duration-300">
                   <span className="text-xl">📸</span>
